@@ -8,14 +8,13 @@ export default function ScannerPage() {
     const router = useRouter();
 
     const scannerRef = useRef(null);
-    const isRunningRef = useRef(false);
+    const scanBlockedRef = useRef(false);
 
     const [status, setStatus] = useState(null);
     const [day, setDay] = useState("1");
     const [type, setType] = useState("entry");
     const [manualTicket, setManualTicket] = useState("");
 
-    // 🔐 Protect Route
     useEffect(() => {
         if (localStorage.getItem("admin") !== "true") {
             router.push("/");
@@ -30,51 +29,27 @@ export default function ScannerPage() {
             try {
                 await scanner.start(
                     { facingMode: "environment" },
-                    { fps: 10, qrbox: 250 },
+                    { fps: 15 },
                     async (decodedText) => {
-                        if (!isRunningRef.current) return;
-                        isRunningRef.current = false;
+                        if (scanBlockedRef.current) return;
+
+                        scanBlockedRef.current = true;
                         await handleScan(decodedText);
                     }
                 );
-                isRunningRef.current = true;
             } catch (err) {
-                console.error("Camera start error:", err);
+                console.error("Camera error:", err);
             }
         };
 
         startScanner();
 
         return () => {
-            if (scannerRef.current && isRunningRef.current) {
-                scannerRef.current.stop().catch(() => { });
-            }
+            scanner.stop().catch(() => { });
         };
     }, []);
 
-    const restartScanner = async () => {
-        try {
-            await scannerRef.current.start(
-                { facingMode: "environment" },
-                { fps: 10, qrbox: 250 },
-                async (decodedText) => {
-                    if (!isRunningRef.current) return;
-                    isRunningRef.current = false;
-                    await handleScan(decodedText);
-                }
-            );
-            isRunningRef.current = true;
-        } catch (err) {
-            console.error("Restart error:", err);
-        }
-    };
-
     const handleScan = async (ticketId) => {
-        if (scannerRef.current && isRunningRef.current) {
-            await scannerRef.current.stop().catch(() => { });
-            isRunningRef.current = false;
-        }
-
         const res = await fetch("/api/scan", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -87,26 +62,23 @@ export default function ScannerPage() {
 
         const data = await res.json();
         setStatus(data.status);
-        // 📳 Vibration Feedback (mobile only)
-        if (typeof window !== "undefined" && navigator.vibrate) {
-            if (data.status === "success") {
-                navigator.vibrate(100); // short buzz
-            } else if (data.status === "already_used") {
-                navigator.vibrate([200, 100, 200]); // double buzz
-            } else if (data.status === "invalid") {
-                navigator.vibrate(400); // long buzz
-            }
+
+        // 📳 Vibration
+        if (navigator.vibrate) {
+            if (data.status === "success") navigator.vibrate(100);
+            else if (data.status === "already_used") navigator.vibrate([200, 100, 200]);
+            else navigator.vibrate(400);
         }
 
-
-        setTimeout(async () => {
+        setTimeout(() => {
             setStatus(null);
-            await restartScanner();
+            scanBlockedRef.current = false; // allow scanning again
         }, 2000);
     };
 
     const handleManualSubmit = async () => {
         if (!manualTicket.trim()) return;
+        scanBlockedRef.current = true;
         await handleScan(manualTicket.trim());
         setManualTicket("");
     };
@@ -120,7 +92,6 @@ export default function ScannerPage() {
 
             <div className="w-full max-w-2xl bg-white/5 backdrop-blur-xl border border-white/10 rounded-3xl p-6 md:p-10 shadow-2xl">
 
-                {/* Controls */}
                 <div className="flex flex-col md:flex-row gap-4 mb-6">
 
                     {type !== "entry" && (
@@ -147,17 +118,14 @@ export default function ScannerPage() {
                     </select>
                 </div>
 
-                {/* Camera */}
                 <div className="rounded-2xl overflow-hidden mb-6">
                     <div id="reader" className="w-full" />
                 </div>
 
-                {/* Manual Entry */}
                 <div className="flex flex-col md:flex-row gap-4">
-
                     <input
                         type="text"
-                        placeholder="Enter Ticket ID (e.g. UNP001)"
+                        placeholder="Enter Ticket ID"
                         value={manualTicket}
                         onChange={(e) => setManualTicket(e.target.value)}
                         className="flex-1 bg-white/10 backdrop-blur-md border border-white/20 p-3 rounded-xl text-white"
@@ -169,28 +137,23 @@ export default function ScannerPage() {
                     >
                         Submit
                     </button>
-
                 </div>
-
             </div>
 
-            {/* Status Overlay */}
             {status && (
                 <div className="fixed inset-0 flex items-center justify-center backdrop-blur-md">
-
                     <div
                         className={`px-16 py-12 rounded-3xl text-center shadow-2xl text-5xl font-extrabold ${status === "success"
-                            ? "bg-green-500/90"
-                            : status === "already_used"
-                                ? "bg-yellow-400/90 text-black"
-                                : "bg-red-500/90"
+                                ? "bg-green-500/90"
+                                : status === "already_used"
+                                    ? "bg-yellow-400/90 text-black"
+                                    : "bg-red-500/90"
                             }`}
                     >
                         {status === "success" && "✓ SUCCESS"}
                         {status === "already_used" && "⚠ ALREADY USED"}
                         {status === "invalid" && "✕ INVALID"}
                     </div>
-
                 </div>
             )}
         </div>
