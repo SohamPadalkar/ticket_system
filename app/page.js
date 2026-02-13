@@ -4,36 +4,41 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 
 export default function Home() {
-  const [password, setPassword] = useState("");
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const router = useRouter();
 
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [admin, setAdmin] = useState(null);
+
   useEffect(() => {
-    if (localStorage.getItem("admin") === "true") {
-      setIsLoggedIn(true);
+    const storedAdmin = localStorage.getItem("admin");
+    if (storedAdmin) {
+      setAdmin(storedAdmin);
     }
   }, []);
 
   const handleLogin = async () => {
-    const res = await fetch("/api/auth", {
+    const res = await fetch("/api/auth/login", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ password }),
+      body: JSON.stringify({ username, password }),
     });
 
     const data = await res.json();
 
     if (data.success) {
-      localStorage.setItem("admin", "true");
-      setIsLoggedIn(true);
+      localStorage.setItem("admin", data.username);
+      setAdmin(data.username);
     } else {
-      alert("Wrong Password");
+      alert("Invalid credentials");
     }
   };
 
   const handleLogout = () => {
     localStorage.removeItem("admin");
-    setIsLoggedIn(false);
+    setAdmin(null);
+    setUsername("");
+    setPassword("");
   };
 
   return (
@@ -45,11 +50,19 @@ export default function Home() {
           UNPLUG Admin Panel
         </h1>
 
-        {!isLoggedIn ? (
+        {!admin ? (
           <>
             <input
+              type="text"
+              placeholder="Username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="p-3 rounded bg-black border border-gray-600 w-full mb-4"
+            />
+
+            <input
               type="password"
-              placeholder="Enter Password"
+              placeholder="Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               className="p-3 rounded bg-black border border-gray-600 w-full mb-4"
@@ -65,18 +78,29 @@ export default function Home() {
         ) : (
           <div className="flex flex-col gap-4">
 
+            <p className="text-sm text-gray-300 mb-2">
+              Logged in as <span className="text-teal-400">{admin}</span>
+            </p>
+
             <button
               onClick={() => router.push("/scanner")}
-              className="bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition px-6 py-3 rounded-2xl font-semibold"
+              className="bg-white/10 border border-white/20 hover:bg-white/20 transition px-6 py-3 rounded-2xl font-semibold"
             >
               Go to Scanner
             </button>
 
             <button
               onClick={() => router.push("/dashboard")}
-              className="bg-white/10 backdrop-blur-md border border-white/20 hover:bg-white/20 transition px-6 py-3 rounded-2xl font-semibold"
+              className="bg-white/10 border border-white/20 hover:bg-white/20 transition px-6 py-3 rounded-2xl font-semibold"
             >
               View Dashboard
+            </button>
+
+            <button
+              onClick={() => router.push("/logs")}
+              className="bg-white/10 border border-white/20 hover:bg-white/20 transition px-6 py-3 rounded-2xl font-semibold"
+            >
+              View Logs
             </button>
 
             <button
@@ -85,7 +109,6 @@ export default function Home() {
             >
               Logout
             </button>
-
 
           </div>
         )}

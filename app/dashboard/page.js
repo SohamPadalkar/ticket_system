@@ -10,11 +10,6 @@ export default function Dashboard() {
     const [stats, setStats] = useState(null);
     const router = useRouter();
 
-    useEffect(() => {
-        if (localStorage.getItem("admin") !== "true") {
-            router.push("/");
-        }
-    }, []);
 
     const fetchStats = async () => {
         const res = await fetch("/api/stats");
@@ -37,6 +32,14 @@ export default function Dashboard() {
             <h1 className="text-4xl font-bold text-teal-400 mb-10">
                 UNPLUG Dashboard
             </h1>
+
+            <button
+                onClick={() => router.push("/")}
+                className="mb-6 bg-white/10 border border-white/20 hover:bg-white/20 transition px-4 py-2 rounded-xl text-sm"
+            >
+                ← Back to Admin
+            </button>
+
 
             {/* Top Stats */}
             <div className="grid md:grid-cols-2 gap-6 mb-10">

@@ -1,12 +1,13 @@
-import fs from "fs";
-import path from "path";
+import connectDB from "@/lib/mongodb";
+import Ticket from "@/models/Ticket";
+
 
 export async function GET() {
-    const filePath = path.join(process.cwd(), "data", "tickets.json");
-    const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    await connectDB();
 
-    const totalTickets = data.length;
+    const tickets = await Ticket.find();
 
+    const totalTickets = tickets.length;
     let totalEntry = 0;
 
     const meals = {
@@ -15,21 +16,19 @@ export async function GET() {
         "3": { breakfast: 0, lunch: 0, dinner: 0 },
     };
 
-    data.forEach(ticket => {
-        if (ticket.entry) totalEntry++;
+    tickets.forEach(ticket => {
+        if (ticket.entryUsed) totalEntry++;
 
-        ["1", "2", "3"].forEach(day => {
-            ["breakfast", "lunch", "dinner"].forEach(meal => {
-                if (ticket.days[day][meal]) {
-                    meals[day][meal]++;
-                }
-            });
+        ticket.meals.forEach(meal => {
+            if (meal.used) {
+                meals[meal.day][meal.type]++;
+            }
         });
     });
 
     return Response.json({
         totalTickets,
         totalEntry,
-        meals,
+        meals
     });
 }

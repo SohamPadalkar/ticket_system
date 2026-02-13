@@ -1,51 +1,55 @@
-import fs from "fs";
-import path from "path";
+import connectDB from "@/lib/mongodb";
+import Ticket from "@/models/Ticket";
+import ScanLog from "@/models/ScanLog";
+
 
 export async function POST(req) {
-    try {
-        const { ticketId, day, type } = await req.json();
+    await connectDB();
+    console.log("SCAN ROUTE HIT");
+    const { ticketId, day, type, admin } = await req.json();
+    console.log("Incoming:", { ticketId, day, type });
 
-        const filePath = path.join(process.cwd(), "data", "tickets.json");
-        const data = JSON.parse(fs.readFileSync(filePath, "utf8"));
+    const ticket = await Ticket.findOne({ ticketId });
 
-        const cleanedId = ticketId.trim().toUpperCase();
+    let status = "invalid";
 
-        const ticket = data.find(
-            (t) => t.ticketId.trim().toUpperCase() === cleanedId
-        );
-
-        if (!ticket) {
-            return Response.json({ status: "invalid" });
-        }
-
-        // ENTRY LOGIC
-        if (type === "entry") {
-            if (ticket.entry === true) {
-                return Response.json({ status: "already_used" });
-            }
-
-            ticket.entry = true;
-        }
-
-        // MEAL LOGIC
-        else {
-            if (!ticket.days || !ticket.days[day]) {
-                return Response.json({ status: "invalid" });
-            }
-
-            if (ticket.days[day][type] === true) {
-                return Response.json({ status: "already_used" });
-            }
-
-            ticket.days[day][type] = true;
-        }
-
-        fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
-
-        return Response.json({ status: "success" });
-
-    } catch (error) {
-        console.error("Scan API Error:", error);
-        return Response.json({ status: "invalid" });
+    if (!ticket) {
+        console.log("Creating log:", { ticketId, day, type, status });
+        await ScanLog.create({ ticketId, day, type, status, admin });
+        return Response.json({ status });
     }
+
+    // ENTRY
+    if (type === "entry") {
+        if (ticket.entryUsed) {
+            status = "already_used";
+        } else {
+            ticket.entryUsed = true;
+            await ticket.save();
+            status = "success";
+        }
+
+
+        await ScanLog.create({ ticketId, day, type, status });
+        return Response.json({ status });
+    }
+
+    // MEAL
+    const meal = ticket.meals.find(
+        m => m.day === day && m.type === type
+    );
+
+    if (!meal || !meal.allowed) {
+        status = "invalid";
+    } else if (meal.used) {
+        status = "already_used";
+    } else {
+        meal.used = true;
+        await ticket.save();
+        status = "success";
+    }
+    
+    await ScanLog.create({ ticketId, day, type, status });
+
+    return Response.json({ status });
 }
